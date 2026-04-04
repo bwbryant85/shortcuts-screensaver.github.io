@@ -3,37 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Liquid Neon</title>
+<title>Liquid Metal</title>
 
 <style>
 html, body {
     margin: 0;
     padding: 0;
-    background: black;
     overflow: hidden;
+    background: black;
 }
 
 canvas {
     display: block;
 }
-
-#start {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-family: sans-serif;
-    font-size: 20px;
-    background: rgba(0,0,0,0.6);
-    padding: 15px 25px;
-    border-radius: 10px;
-}
 </style>
 </head>
 <body>
 
-<div id="start">Tap to enable audio</div>
 <canvas id="c"></canvas>
 
 <script>
@@ -41,6 +27,7 @@ const canvas = document.getElementById("c");
 const ctx = canvas.getContext("2d");
 
 let w, h;
+
 function resize() {
     w = canvas.width = window.innerWidth;
     h = canvas.height = window.innerHeight;
@@ -48,77 +35,71 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-// AUDIO
-let audioLevel = 0;
-let started = false;
-
-document.getElementById("start").onclick = async () => {
-    document.getElementById("start").style.display = "none";
-
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const analyser = audioCtx.createAnalyser();
-    const source = audioCtx.createMediaStreamSource(stream);
-
-    source.connect(analyser);
-    analyser.fftSize = 128;
-
-    const data = new Uint8Array(analyser.frequencyBinCount);
-
-    function updateAudio() {
-        analyser.getByteFrequencyData(data);
-
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) sum += data[i];
-
-        audioLevel = sum / data.length / 255;
-        requestAnimationFrame(updateAudio);
-    }
-
-    updateAudio();
-};
-
-// BLOBS
+// BLOBS (metaball-style)
 const blobs = [];
 
-for (let i = 0; i < 7; i++) {
+for (let i = 0; i < 6; i++) {
     blobs.push({
         x: Math.random() * w,
         y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.4,
-        base: 100 + Math.random() * 60,
-        hue: Math.random() * 360
+        vx: (Math.random() - 0.5) * 0.6,
+        vy: (Math.random() - 0.5) * 0.6,
+        base: 120 + Math.random() * 60,
+        pulse: Math.random() * 1000
     });
 }
 
 function draw() {
-    // soft fade trail (liquid feel)
-    ctx.fillStyle = "rgba(0,0,0,0.15)";
-    ctx.fillRect(0, 0, w, h);
+    const image = ctx.createImageData(w, h);
+    const data = image.data;
 
+    let t = performance.now() * 0.002;
+
+    // update blobs
     blobs.forEach(b => {
         b.x += b.vx;
         b.y += b.vy;
 
         if (b.x < 0 || b.x > w) b.vx *= -1;
         if (b.y < 0 || b.y > h) b.vy *= -1;
-
-        b.hue += 0.3;
-
-        let r = b.base + audioLevel * 120;
-
-        let g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, r);
-        g.addColorStop(0, `hsla(${b.hue},100%,60%,0.8)`);
-        g.addColorStop(0.6, `hsla(${b.hue+20},100%,55%,0.25)`);
-        g.addColorStop(1, "rgba(0,0,0,0)");
-
-        ctx.fillStyle = g;
-
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
-        ctx.fill();
     });
+
+    // metaball field
+    for (let y = 0; y < h; y += 2) {
+        for (let x = 0; x < w; x += 2) {
+
+            let sum = 0;
+
+            blobs.forEach(b => {
+                let dx = x - b.x;
+                let dy = y - b.y;
+                let dist = Math.sqrt(dx*dx + dy*dy);
+
+                let radius = b.base + Math.sin(t + b.pulse) * 20;
+                sum += (radius * radius) / (dist * dist + 1);
+            });
+
+            let index = (y * w + x) * 4;
+
+            if (sum > 1.2) {
+                // neon liquid coloring
+                let hue = (sum * 40 + t * 100) % 360;
+
+                let r = Math.sin(hue * 0.02) * 127 + 128;
+                let g = Math.sin(hue * 0.02 + 2) * 127 + 128;
+                let b = Math.sin(hue * 0.02 + 4) * 127 + 128;
+
+                data[index] = r;
+                data[index + 1] = g;
+                data[index + 2] = b;
+                data[index + 3] = 255;
+            } else {
+                data[index + 3] = 255;
+            }
+        }
+    }
+
+    ctx.putImageData(image, 0, 0);
 
     requestAnimationFrame(draw);
 }
