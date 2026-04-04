@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Liquid Neon</title>
+
+<style>
+html, body {
+    margin: 0;
+    padding: 0;
+    background: black;
+    overflow: hidden;
+}
+
+canvas {
+    display: block;
+}
+
+#start {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-family: sans-serif;
+    font-size: 20px;
+    background: rgba(0,0,0,0.6);
+    padding: 15px 25px;
+    border-radius: 10px;
+}
+</style>
+</head>
+<body>
+
+<div id="start">Tap to enable audio</div>
+<canvas id="c"></canvas>
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+
+let w, h;
+function resize() {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
+
+// AUDIO
+let audioLevel = 0;
+let started = false;
+
+document.getElementById("start").onclick = async () => {
+    document.getElementById("start").style.display = "none";
+
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const analyser = audioCtx.createAnalyser();
+    const source = audioCtx.createMediaStreamSource(stream);
+
+    source.connect(analyser);
+    analyser.fftSize = 128;
+
+    const data = new Uint8Array(analyser.frequencyBinCount);
+
+    function updateAudio() {
+        analyser.getByteFrequencyData(data);
+
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) sum += data[i];
+
+        audioLevel = sum / data.length / 255;
+        requestAnimationFrame(updateAudio);
+    }
+
+    updateAudio();
+};
+
+// BLOBS
+const blobs = [];
+
+for (let i = 0; i < 7; i++) {
+    blobs.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        base: 100 + Math.random() * 60,
+        hue: Math.random() * 360
+    });
+}
+
+function draw() {
+    // soft fade trail (liquid feel)
+    ctx.fillStyle = "rgba(0,0,0,0.15)";
+    ctx.fillRect(0, 0, w, h);
+
+    blobs.forEach(b => {
+        b.x += b.vx;
+        b.y += b.vy;
+
+        if (b.x < 0 || b.x > w) b.vx *= -1;
+        if (b.y < 0 || b.y > h) b.vy *= -1;
+
+        b.hue += 0.3;
+
+        let r = b.base + audioLevel * 120;
+
+        let g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, r);
+        g.addColorStop(0, `hsla(${b.hue},100%,60%,0.8)`);
+        g.addColorStop(0.6, `hsla(${b.hue+20},100%,55%,0.25)`);
+        g.addColorStop(1, "rgba(0,0,0,0)");
+
+        ctx.fillStyle = g;
+
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    requestAnimationFrame(draw);
+}
+
+draw();
+</script>
+
+</body>
+</html>
