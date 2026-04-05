@@ -1,2 +1,2 @@
 # shortcuts-screensaver.github.io
-for a shortcuts project
+Screensaver project, HTML based. For iPhone
